@@ -4,140 +4,202 @@ Require Import ssrbool ssrfun eqtype ssrnat seq choice fintype.
 From mathcomp
 Require Import div path bigop prime finset fingroup.
 
+Set Implicit Arguments.
+Unset Strict Implicit.
+Unset Printing Implicit Defensive.
+
+(** tentative formalization of the theorem V.3.1 of
+    [Arnaudies&Fraysse]
+    Arnaudies, J.M., Fraysse, H.: Cours de mathematiques 1, Algebre, Dunod Universite, 1987
+
+    to illustrate the Mathematiques Components library
+*)
+
+(** Sect. 2: Basics of Coq *)
+
+Lemma andC :
+  forall P Q : Prop, P /\ Q -> Q /\ P.
+Proof.
+move=> P Q.
+by case.
+Show Proof.
+(*exact (fun P Q PandQ => match PandQ with
+  conj p q => conj q p end).*)
+Qed.
+
+Lemma andbC :
+  forall P Q : bool, andb P Q = true -> andb Q P = true.
+Proof.
+case.
+- by case.
+- by case.
+(*exact (fun P Q => match P with
+| true => match Q with
+          | true => id
+          | false => id
+          end
+| false => match Q with
+          | true => id
+          | false => id
+          end
+      end).*)
+Qed.
+
+(** Sect. 5: Overview of Finite Groups *)
+
 Local Open Scope group_scope.
+
+Module Sect5.
+Section sect5.
+
+Variable gT : finGroupType.
+Variables G : {group gT}.
+Variables g h : gT.
+Hypotheses (gG : g \in G) (hG : h \in G).
+Check g * h : gT.
+Check groupM gG hG : g * h \in G.
+
+End sect5.
+End Sect5.
 
 Section coset_bijection.
 
 Variable gT : finGroupType.
 Variables G H : {group gT}.
-Hypothesis (HG : H \subset G).
+Hypothesis HG : H \subset G.
 
-Definition dom : {set gT} := repr @: lcosets H G.
+(** Sect. 6: Left-cosets are disjoint *)
 
-Lemma dom_in_G : dom \subset G.
+Lemma coset_disjoint L0 L1 :
+  L0 \in lcosets H G ->
+  L1 \in lcosets H G ->
+  L0 :&: L1 != set0 -> L0 = L1.
 Proof.
-apply/subsetP => g.
-case/imsetP => /= gs.
-case/lcosetsP => g' g'H ->{gs} ->{g}.
-rewrite /repr.
-case: ifP => // abs.
-case: pickP => /=.
-  move=> g''.
-  case/lcosetP => g3 Hg3 ->.
-  rewrite groupM => //.
-  move/subsetP : HG; by apply.
-move/(_ g').
-by rewrite lcoset_refl.
-Qed.
-
-Lemma same_coset K K' x:
-  K \in lcosets H G ->
-  K' \in lcosets H G ->
-  x \in K -> x \in K' ->         
-  K = K'.
-Proof.
-case/lcosetsP => x0 Hx0 ->.
-case/lcosetsP => x1 Hx1 ->.
-rewrite 2!mem_lcoset => H1 H2.
+case/lcosetsP => g0 g0G ->{L0}.
+case/lcosetsP => g1 g1G ->{L1}.
+move=> g0_g1_disj.
 apply/lcoset_eqP.
-rewrite mem_lcoset.
-rewrite -(mul1g x0).
-rewrite -(mulgV x).
+case/set0Pn : g0_g1_disj => /= g.
+rewrite in_setI => /andP[].
+rewrite 3!mem_lcoset => g_g0 g_g1.
+rewrite -(mul1g g0).
+rewrite -(mulgV g).
 rewrite 2!mulgA.
 rewrite -mulgA.
 rewrite groupM //.
 rewrite groupVl //.
-by rewrite invMg invgK.
+rewrite invMg.
+by rewrite invgK.
 Qed.
+
+(** Sect. 7: Injection into the set of left-cosets *)
+
+Definition reprs := repr @: lcosets H G.
 
 Lemma mem_repr_coset x : x \in G -> repr (x *: H) \in G.
 Proof.
 move=> xG.
 rewrite /repr.
-case: ifP => // x1.
+case: ifPn => // x1.
 case: pickP => /=.
-  move=> x0.
-  case/lcosetP => x2 Hx2 ->.
+  move=> g0.
+  case/lcosetP => g1 g1H ->.
   rewrite groupM //.
   by move/subsetP : (HG); apply.
 move/(_ x).
 by rewrite lcoset_refl.
 Qed.
 
-Lemma injective_quot : {in dom &, injective (fun x => x *: H)}.
-Proof.
-move=> x x' /imsetP[] /= L LHG xL /imsetP[] /= K KHG x'K abs.
-suff : L = K by move=> LK; rewrite LK in xL; rewrite xL x'K.
-case/lcosetsP : LHG => x0 x0G x0L; subst L.
-case/lcosetsP : KHG => x1 x1G x1K; subst K.
-have : x *: H = x0 *: H.
-  apply same_coset with x => //.
-  apply/lcosetsP.
-  exists x => //.
-  rewrite xL.
-  by apply mem_repr_coset.
-  apply/lcosetsP.
-  by exists x0.
-  by rewrite lcoset_refl.            
-  rewrite xL.
-  apply mem_repr with x0.
-  by rewrite lcoset_refl.
-move=> <-.
-have : x' *: H = x1 *: H.
-  apply same_coset with x' => //.
-  apply/lcosetsP.
-  exists x' => //.
-  rewrite x'K.
-  by apply mem_repr_coset.
-  apply/lcosetsP.
-  by exists x1.
-  by rewrite lcoset_refl.            
-  rewrite x'K.
-  apply mem_repr with x1.
-  by rewrite lcoset_refl.
-by move=> <-.
-Qed.
-
-Lemma repr_form x : x \in G -> x *: H = repr (x *: H) *: H.
+Lemma repr_form x : x \in G -> repr (x *: H) *: H = x *: H.
 Proof.
 move=> xG.
-apply (same_coset) with (repr (x *: H)).
-  apply/lcosetsP.
-  by exists x.
-  apply/lcosetsP.
+apply coset_disjoint.
+- apply/lcosetsP.
   exists (repr (x *: H)) => //.
   by apply mem_repr_coset.
-  apply mem_repr with x => //.
-  by rewrite lcoset_refl.
+- apply/lcosetsP.
+  by exists x.
+- apply/set0Pn => /=.
+  exists (repr (x *: H)) => //.
+  rewrite in_setI.
+  rewrite lcoset_refl /=.
+  rewrite (mem_repr x) //.
   by rewrite lcoset_refl.
 Qed.
 
-Lemma surj : (fun x => x *: H) @: dom = lcosets H G.
+Lemma reprs_subset : reprs \subset G.
 Proof.
-have Htmp : (fun x => x *: H) @: dom \subset lcosets H G.
-  apply/subsetP => i.
+apply/subsetP => g.
+case/imsetP => /= gs.
+case/lcosetsP => g' g'H ->{gs} ->{g}.
+by rewrite mem_repr_coset.
+Qed.
+
+Lemma injective_coset :
+  {in reprs &, injective (fun g => g *: H)}.
+Proof.
+move=> /= g g' /imsetP[] /= L LHG gL.
+move=> /imsetP[] /= K KHG g'K abs.
+suff : L = K.
+  move=> LK.
+  rewrite LK in gL.
+  by rewrite gL g'K.
+case/lcosetsP : LHG => g0 g0G g0L.
+rewrite {}g0L {L} in gL *.
+case/lcosetsP : KHG => g1 g1G g1K.
+rewrite {}g1K {K} in g'K *.
+have <- : g *: H = g0 *: H.
+  apply coset_disjoint.
+  - apply/lcosetsP.
+    exists g => //.
+    by rewrite gL mem_repr_coset.
+  - apply/lcosetsP.
+    by exists g0.
+  - apply/set0Pn.
+    exists (repr (g0 *: H)).
+    by rewrite !inE -gL lcoset_refl /= gL (mem_repr g0) // lcoset_refl.
+suff : g' *: H = g1 *: H.
+  by move=> <-.
+apply coset_disjoint => //.
+- apply/lcosetsP.
+  exists g' => //.
+  by rewrite g'K mem_repr_coset.
+- apply/lcosetsP.
+  by exists g1.
+- apply/set0Pn.
+  exists (repr (g1 *: H)).
+  by rewrite inE -g'K lcoset_refl /= g'K (mem_repr g1) // lcoset_refl.
+Qed.
+
+Lemma surjective_coset : (fun x => x *: H) @: reprs = lcosets H G.
+Proof.
+apply/eqP.
+rewrite eqEsubset.
+apply/andP; split.
+- apply/subsetP => i.
   case/imsetP => g.
   case/imsetP => L HL ->{g} ->{i}.
   apply/lcosetsP.
   exists (repr L) => //.
   case/lcosetsP : HL => x xG ->.
   by apply mem_repr_coset.
-have Htmp' : lcosets H G \subset (fun x => x *: H) @: dom.
-  apply/subsetP => i.
+- apply/subsetP => i.
   case/lcosetsP => x xG ->{i}.
   apply/imsetP.
   exists (repr (x *: H)).
-    rewrite /dom.
+    rewrite /reprs.
     apply/imsetP.
     exists (x *: H) => //.
     apply/lcosetsP.
     by exists x.
-by rewrite -repr_form.
-apply/eqP.
-by rewrite eqEsubset Htmp Htmp'.
+  by rewrite repr_form.
 Qed.
 
 End coset_bijection.
+
+(** Sect. 8: Transitivity of the group index *)
+
+Notation "#| G : H |" := #| lcosets H G |.
 
 Section index.
 
@@ -145,162 +207,148 @@ Variable gT : finGroupType.
 Variables G H K : {group gT}.
 Hypotheses (HG : H \subset G) (KG : K \subset G) (HK : K \proper H).
 
-Lemma index : #| lcosets K G| = (#| lcosets H G| * #| lcosets K H|)%nat.
+Lemma index_trans : #| G : K | = (#| G : H | * #| H : K |)%nat.
 Proof.
 rewrite /=.
-set calG := dom _ G H.
-have HcalG : {in calG &, injective (fun x => x *: H)}.
-  by move: (injective_quot _ _ _ HG).
-set calH := dom _ H K.
-have HcalH : {in calH &, injective (fun x=> x *: K)}.
-  apply injective_quot.
-  by move/proper_sub : (HK).
-set phi := fun xy : gT * gT => let: (x, y) := xy in (x * y) *: K.
+set calG := reprs G H.
+have calG_H_inj : {in calG &, injective (fun x => x *: H)}.
+  by apply: injective_coset HG.
+set calH := reprs H K.
+have calH_K_inj : {in calH &, injective (fun x=> x *: K)}.
+  apply: injective_coset.
+  by move/proper_sub : HK.
+pose phi := fun gh : gT * gT => let: (g, h) := gh in (g * h) *: K.
+(* [Arnaudies&Fraysse] injectivite de phi:
+   Si ghK = g'h'K avec g, g' \in calG et h, h' \in calH,
+   on en deduit g'^-1ghK = h'K \proper H.
+   Donc g'^-1gH \cap H n'est pas vide puisque h'K \proper H
+   et h'K \proper g'^-1gH, et puisque g'^-1gH et H sont deux classes
+   a gauche mod (H), necessairement g'^-1gH = H, d'ou gH = g'H,
+   d'ou g = g' puisque alpha est bijective.
+   On en deduit: hK = h'K, d'ou h = h' puisque beta est bijective,
+   et finalement (g,h)=(g'.h'). *)
 have phi_injective : {in setX calG calH & , injective phi}.
   case => g h.
   rewrite inE /=.
   case => g' h' /andP[gG hH].
   rewrite /phi inE /= => /andP[g'G h'H] ghK.
-  have H1 : (g'^-1 * g * h) *: K = h' *: K.
-    move/(congr1 (fun x => g'^-1 *: x)) : ghK.
-    rewrite -lcosetM mulgA => ->.
-    by rewrite -lcosetM mulgA mulVg mul1g.
-  have H2 : h' *: K \proper H.
+  have step1 : (g'^-1 * g * h) *: K = h' *: K.
+    move: ghK.
+    move/(congr1 (fun X => g'^-1 *: X)).
+    by rewrite -2!lcosetM !mulgA mulVg mul1g.
+  have step2 : h' *: K \proper H.
     apply/properP; split.
       apply/subsetP => x.
       case/lcosetP => x0 Hx0 ->.
       rewrite groupM //.
-      by move/proper_sub : (HK) => /dom_in_G /subsetP; apply.
+        by move/proper_sub : (HK) => /reprs_subset /subsetP; apply.
       move/proper_sub : HK => /subsetP; by apply.
     case/properP : HK => HK' [x xH xK].
     exists (h' * x) => //.
     rewrite groupM //.
-      by move/proper_sub : (HK) => /dom_in_G /subsetP; apply.
+      by move/proper_sub : (HK) => /reprs_subset /subsetP; apply.
     apply: contra xK.
     case/lcosetP => x0 x0K.
     by move/mulgI => ->.
-  have H3 : (g'^-1 * g *: H) :&: H != set0.
-    have H3'' : h' *: K \proper (g'^-1 * g) *: H. 
-      rewrite -H1.
+  have {step2}step3 : (g'^-1 * g *: H) :&: H != set0.
+    have step3 : h' *: K \proper (g'^-1 * g) *: H.
+      rewrite -step1.
       apply/properP; split.
-        rewrite sub_lcoset.
-        rewrite -lcosetM.
-        rewrite mulgA.
-        rewrite mulVg mul1g.
+        rewrite sub_lcoset -lcosetM mulgA mulVg mul1g.
         apply/subsetP => x.
         case/lcosetP => x0 x0K ->.
         rewrite groupM //.
-          by move/proper_sub : (HK) => /dom_in_G /subsetP; apply.
+          by move/proper_sub : (HK) => /reprs_subset /subsetP; apply.
         by move/proper_sub : HK => /subsetP; apply.
       case/properP : HK => HK' [x xH xK].
       exists ((g'^-1 * g) * (h * x)) => //.
-        rewrite mem_lcoset.
-        rewrite mulgA.
-        rewrite mulVg.
-        rewrite mul1g groupM //.
-        by move/proper_sub : (HK) => /dom_in_G /subsetP; apply.
-      rewrite mem_lcoset.
-      rewrite -(mulgA g'^-1 g (h * x)).
-      rewrite (mulgA g h x).
-      rewrite (mulgA g'^-1 (g * h) x).
-      rewrite (mulgA g'^-1 g h).
-      rewrite mulgA.
-      by rewrite mulVg mul1g.
-    (* use H2 to conclude *)
-    apply/set0Pn.
-    case/properP : HK => HK' [x xH xK].
-    exists h'.
+        rewrite mem_lcoset mulgA mulVg mul1g groupM //.
+        by move/proper_sub : (HK) => /reprs_subset /subsetP; apply.
+      rewrite mem_lcoset -(mulgA g'^-1 g (h * x)) (mulgA g h x).
+      by rewrite (mulgA g'^-1 (g * h) x) (mulgA g'^-1 g h) mulgA mulVg mul1g.
+    apply/set0Pn; exists h'.
     rewrite in_setI.
     apply/andP; split.
-      move/proper_sub/subsetP : H3''.
-      apply.
-      rewrite mem_lcoset.
-      by rewrite mulVg group1.
-    by move/proper_sub : (HK) => /dom_in_G /subsetP; apply.
-  have H4 : (g'^-1 * g) *: H = H.
-    case/set0Pn : H3 => x.
+      move/proper_sub/subsetP : step3; apply.
+      by rewrite mem_lcoset mulVg group1.
+    move/proper_sub/subsetP : step2; apply.
+    by rewrite mem_lcoset mulVg group1.
+  have {step3}step4 : (g'^-1 * g) *: H = H.
+    case/set0Pn : step3 => x.
     rewrite in_setI.
     case/andP.
     case/lcosetP => x0 Hx0 -> Htmp.
     rewrite lcoset_id //.
-    rewrite -(mulg1 g).
-    rewrite -(mulgV x0).
-    rewrite !mulgA.
-    rewrite groupM //.
-    by rewrite groupVl // invgK.
-  have H5 : g *: H = g' *: H.
-    rewrite -{2}H4.
-    rewrite -lcosetM.
-    by rewrite mulgA mulgV mul1g.
-  have H6 : g = g'.
-    by apply HcalG.
-  have H7 : h *: K = h' *: K.
-    subst g'.
-    by rewrite mulVg mul1g in H1.
-  have H8 : h = h'.
-    by apply HcalH.
-  by rewrite H6 H8.
-have surj1 : (fun x => x *: H) @: calG = lcosets H G.
-  by apply surj.
-have surj2 : (fun x => x *: K) @: calH = lcosets K H.
-  apply surj.
+    by rewrite -(mulg1 g) -(mulgV x0) !mulgA groupM // groupVl // invgK.
+  have {step4}step5 : g *: H = g' *: H.
+    by rewrite -{2}step4 -lcosetM mulgA mulgV mul1g.
+  have {step5}step6 : g = g'.
+    by apply calG_H_inj.
+  have step7 : h *: K = h' *: K.
+    by rewrite -step1 step6 mulVg mul1g.
+  have {step7}step8 : h = h'.
+    by apply calH_K_inj.
+  by rewrite step6 step8.
+have calG_H_surj : (fun x => x *: H) @: calG = lcosets H G.
+  by apply surjective_coset.
+have calH_K_surj : (fun x => x *: K) @: calH = lcosets K H.
+  apply surjective_coset.
   by move/proper_sub : (HK); apply.
-have surj3 : phi @: (setX calG calH) = lcosets K G.
-  apply/setP => /= i.
-  apply/idP/idP.
+(* [Arnaudies&Fraysse] surjectivite de phi:
+   Soit l \in calG; alors lH \in (G/H)_g.
+   On a donc un g \in calG tel que lH = gH;
+   alors g^-1lH = H, donc g^-1l \in H.
+   On a donc un h \in calH tel que g^-1lK = hK.
+   On en deduit lK = ghK = phi(g, h). *)
+have phi_surjective : phi @: (setX calG calH) = lcosets K G.
+  apply/eqP.
+  rewrite eqEsubset.
+  apply/andP; split; apply/subsetP => i.
     case/imsetP => /=; case=> [x1 x2].
     rewrite !inE /= => /andP[Hx1 Hx2] ->{i}.
     apply/lcosetsP.
     exists (x1 * x2) => //.
     rewrite groupM //.
-    by move : (HG) => /dom_in_G /subsetP; apply.
+      by move : (HG) => /reprs_subset /subsetP; apply.
     move/subsetP : HG; apply.
-    move : x2 Hx2.
-    apply/subsetP.
-    by apply/dom_in_G/proper_sub.
+    apply/subsetP: x2 Hx2.
+    by apply/reprs_subset/proper_sub.
   case/lcosetsP => l lG ->{i}.
   apply/imsetP => /=.
-  have [g [gcalG Hg]] : exists g, g \in calG /\ g *: H = l *: H.
+  have [g [gcalG gHlH]] : exists g, g \in calG /\ g *: H = l *: H.
     exists (repr (l *: H)).
     split.
       apply/imsetP.
       exists (l *: H) => //.
       apply/lcosetsP.
       by exists l.
-    by rewrite -(repr_form _ G).
-  have H1 : (g^-1 * l) *: H = H.
-    move/(congr1 (fun x => g^-1 *: x)) in Hg.
-    rewrite -!lcosetM mulVg lcoset1 in Hg.
-    done.
-  have H2 : g^-1 * l \in H.
-    rewrite -H1.
-    by rewrite lcoset_refl.
-  have [h [hcalH Hh]] : exists h, h \in calH /\ (g^-1 * l) *: K = h *: K.
+    by rewrite (repr_form HG).
+  have step1 : (g^-1 * l) *: H = H.
+    move/(congr1 (fun x => g^-1 *: x)) : gHlH.
+    by rewrite -!lcosetM mulVg lcoset1.
+  have {step1}step2 : g^-1 * l \in H.
+    by rewrite -step1 lcoset_refl.
+  have [h [hcalH glKhK]] : exists h, h \in calH /\ (g^-1 * l) *: K = h *: K.
     exists (repr ((g^-1 * l) *: K)).
     split.
       apply/imsetP.
       exists ((g^-1 * l) *: K) => //.
       apply/lcosetsP.
-      by exists (g^-1 * l) => //.
-    rewrite -(repr_form _ G) //.
-    rewrite groupM //.
-    rewrite groupVl // invgK //.
-    by move: (dom_in_G _ _ _ HG) => /subsetP; apply.
+      by exists (g^-1 * l).
+    rewrite (repr_form KG) // groupM // groupVl // invgK //.
+    by move: (reprs_subset HG) => /subsetP; apply.
   exists (g, h).
     by rewrite in_setX gcalG.
-  move/(congr1 (fun x => g *: x)) in Hh.
-  rewrite -!lcosetM in Hh.
-  rewrite /phi.
-  rewrite -Hh.
-  by rewrite mulgA mulgV mul1g.
-rewrite -surj3 -surj1 -surj2.
-rewrite (card_in_imset phi_injective).
-rewrite cardsX.
-rewrite (card_in_imset HcalG).
-by rewrite (card_in_imset HcalH).
+  move/(congr1 (fun x => g *: x)) : glKhK.
+  by rewrite -!lcosetM mulgA mulgV mul1g => ->.
+rewrite -phi_surjective -calG_H_surj -calH_K_surj.
+rewrite (card_in_imset phi_injective) cardsX.
+by rewrite (card_in_imset calG_H_inj) (card_in_imset calH_K_inj).
 Qed.
 
 End index.
+
+(* Sect. 9: Lagrange Theorem *)
 
 Section lagrange.
 
@@ -308,56 +356,47 @@ Variable gT : finGroupType.
 Variables G H : {group gT}.
 Hypotheses (HG : H \subset G).
 
-Lemma G1 : 1%G \subset G.
+Lemma coset1 g : g *: (1%G : {group gT}) = [set g].
 Proof.
-apply/subsetP => x.
-by rewrite inE => /eqP ->.
-Qed.
-
-Lemma H3 g : g *: (1%G : {group gT}) = [set g].
-Proof.
-apply/setP => j.
-rewrite !inE.
-apply/idP/idP => //.
+apply/eqP; rewrite eqEsubset; apply/andP; split; apply/subsetP => j.
   case/lcosetP => x.
   rewrite !inE => /eqP ->.
   by rewrite mulg1 => /eqP.
-move/eqP => ->.
+rewrite in_set1 => /eqP ->.
 apply/lcosetP.
- exists 1 => //.
+exists 1 => //.
 by rewrite mulg1.
 Qed.
 
-Lemma H2 (K : {group gT}) : lcosets 1%G K = (set1) @: K.
+Lemma lcosets1 (K : {group gT}) : lcosets 1%G K = (set1) @: K.
 Proof.
-apply/setP => i.
-apply/idP/idP.
+apply/eqP; rewrite eqEsubset; apply/andP; split; apply/subsetP => i.
   case/lcosetsP => g gK ->{i}.
   apply/imsetP.
   exists g => //.
-  by apply H3.
+  by apply coset1.
 case/imsetP => g gK ->{i}.
 apply/lcosetsP.
 exists g => //.
-by rewrite H3.
+by rewrite coset1.
 Qed.
 
-Theorem Lagrange : #| G | = (#| H | * #| lcosets H G|)%nat.
-Proof. 
-have [H1|H1] := boolP (1%G \proper H); last first.
-  have {H1}H1 : H = 1%G.
-    apply/trivGP.
-    rewrite proper1G negbK in H1.
-    by rewrite (eqP H1).
-  rewrite H1 cards1 mul1n H2 // card_imset //.
-  exact: set1_inj.
-move: (index _ G H 1%G HG G1 H1).
-rewrite H2.
-rewrite card_imset; last first.
-  exact: set1_inj.
-move=> ->.
-rewrite mulnC H2 card_imset //.
-  exact: set1_inj.
+Theorem Lagrange : #| G | = (#| H | * #| G : H |)%nat.
+Proof.
+case/boolP : (1%G \proper H) => H1; last first.
+  suff -> : H = 1%G.
+    rewrite cards1 mul1n lcosets1 // card_imset //.
+    exact: set1_inj.
+  apply/trivGP.
+  move: H1.
+  by rewrite proper1G negbK => /eqP ->.
+have G1 : 1%G \subset G.
+  apply/subsetP => h.
+  by rewrite inE => /eqP ->.
+move: (index_trans HG G1 H1).
+rewrite lcosets1 (card_imset _ set1_inj).
+rewrite mulnC lcosets1 card_imset //.
+exact: set1_inj.
 Qed.
 
 End lagrange.
